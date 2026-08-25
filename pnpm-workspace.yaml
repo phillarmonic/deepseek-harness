@@ -78,6 +78,7 @@ minimumReleaseAgeExclude:
   # All platform aliases resolve to the @openai/codex package name, so their
   # reviewed exact versions must share one version-union policy entry.
   - '@openai/codex@0.153.4||0.153.4-darwin-arm64||0.153.4-darwin-x64||0.153.4-linux-arm64||0.153.4-linux-x64||0.153.4-win32-arm64||0.153.4-win32-x64'
+  - '@phillarmonic/dsh-llm-kimi@0.0.1'
   # The native computer-use provider pins this reviewed upstream runtime closure.
   - '@trycua/cua-driver-darwin-arm64@0.28.0'
   - '@trycua/cua-driver-darwin-x64@0.28.0'
