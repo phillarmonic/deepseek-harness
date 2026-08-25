@@ -28,7 +28,7 @@ The package has no singleton state or runtime identity. The client-bundle purity
 
 ## Verification
 
-Utility tests pin deterministic bytes, lowercase formatting, version bits, variant bits, and operation without `crypto.randomUUID`. Fetch-carrier coverage calls `host.describe` with only `getRandomValues()` available. Conversation coverage creates a draft image under the same constraint. Client-bundle purity coverage admits the shared package, and the real Web composition remains the browser-level owner of connection bootstrap behavior.
+Utility tests pin deterministic bytes, lowercase formatting, version bits, variant bits, and operation without `crypto.randomUUID`. Fetch-carrier coverage calls `host.describe` with only `getRandomValues()` available. Conversation coverage creates a draft image under the same constraint. Client-bundle purity coverage admits the shared package. The real Web composition starts the source CLI on a LAN address, verifies the insecure browser context, observes a successful `host.describe`, and keeps both event sockets connected.
 
 ## Consequences
 

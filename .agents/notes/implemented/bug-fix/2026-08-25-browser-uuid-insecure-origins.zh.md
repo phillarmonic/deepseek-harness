@@ -28,7 +28,7 @@ API carrier、通用 connection RPC、fixture 数据和会话草稿都需要生�
 
 ## Verification
 
-工具包测试固定了确定性字节、小写格式、version 位、variant 位，以及没有 `crypto.randomUUID` 时的运行。Fetch carrier 覆盖在只提供 `getRandomValues()` 时调用 `host.describe`。会话覆盖在相同约束下创建草稿图片。客户端 bundle 纯度覆盖允许共享包，真实 Web 组合继续负责浏览器层的连接启动行为。
+工具包测试固定了确定性字节、小写格式、version 位、variant 位，以及没有 `crypto.randomUUID` 时的运行。Fetch carrier 覆盖在只提供 `getRandomValues()` 时调用 `host.describe`。会话覆盖在相同约束下创建草稿图片。客户端 bundle 纯度覆盖允许共享包。真实 Web 组合在局域网地址启动源码 CLI，验证不安全浏览器上下文，观察成功的 `host.describe`，并保持两个事件 socket 连接。
 
 ## Consequences
 

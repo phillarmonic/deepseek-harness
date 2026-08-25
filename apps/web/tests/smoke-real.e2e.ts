@@ -212,8 +212,9 @@ describe('dsh web keyless CLI smoke', () => {
         stdio: ['ignore', 'pipe', 'pipe'],
       },
     )
-    const browser = await chromium.launch()
+    let browser: Browser | undefined
     try {
+      browser = await chromium.launch()
       const loopbackUrl = new URL(await waitForReadyLine(child))
       const page = await newEnglishPage(browser)
       const connectionWarnings: string[] = []
@@ -240,7 +241,7 @@ describe('dsh web keyless CLI smoke', () => {
       expect(connectionWarnings).toEqual([])
       await page.close()
     } finally {
-      await browser.close()
+      await browser?.close()
       const closed = child.exitCode === null
         ? new Promise<void>((resolveClose) => { child.once('close', () => { resolveClose() }) })
         : Promise.resolve()
