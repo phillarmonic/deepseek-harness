@@ -1,0 +1,32 @@
+# ================================================================
+# TEMPORARY — Phase 1: code-only structural build (no LLM).
+# Delete this whole block for Phase 2 to fold docs + notes in
+# through semantic extraction and labelling.
+# ================================================================
+**/*.md
+**/*.spec.ts
+**/*.spec.tsx
+**/*.e2e.ts
+**/*.snapshot.ts
+
+# Translation duplicates — English source is canonical
+**/*.zh.md
+**/*.i18n.yaml
+
+# VitePress support site — its prose is projected from docs/
+website/
+
+# Recorded test outputs & replay fixtures (large, derived)
+**/tests/snapshots/
+**/tests/fixtures/
+**/__snapshots__/
+*.snap
+*.jsonl
+scripts/fixtures/
+
+# Vendored upstream test suites (upstream behavior, not this project's)
+vendor/**/test/
+vendor/**/tests/
+
+# Frozen decision history (audit only, never current authority)
+.agents/notes/archived/
