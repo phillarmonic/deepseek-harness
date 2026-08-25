@@ -19,10 +19,10 @@ import { spawn } from 'node:child_process'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
-import { tmpdir } from 'node:os'
+import { networkInterfaces, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Page, WebSocket as PlaywrightWebSocket } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { REPO_ROOT, connectFreshWorkspace, newEnglishPage, probeFreePort, requireDist, saveFailureShot } from './support.ts'
@@ -147,6 +147,9 @@ const UI_PLUGIN_DIRS = [
   'ui-model-selection', 'ui-user-questions', 'ui-trajectory', '../session-query/session-log-export',
 ]
 const ROUND_DONE_MARKER = 'WEB_ROUND_DONE'
+const LAN_ADDRESS = Object.values(networkInterfaces()).flat().find(
+  address => address?.family === 'IPv4' && !address.internal,
+)?.address
 const notReady = UI_PLUGIN_DIRS.filter((dir) => {
   const bundle = join(REPO_ROOT, 'packages/client', dir, 'lib/client.js')
   return !existsSync(bundle) || !readFileSync(bundle, 'utf8').includes('exports.apply')
@@ -178,6 +181,66 @@ describe('dsh web keyless CLI smoke', () => {
       expect(readyUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/)
       expect((await fetch(readyUrl)).status).toBe(200)
     } finally {
+      const closed = child.exitCode === null
+        ? new Promise<void>((resolveClose) => { child.once('close', () => { resolveClose() }) })
+        : Promise.resolve()
+      if (child.exitCode === null) child.kill('SIGTERM')
+      await closed
+      rmSync(sessionsDir, { recursive: true, force: true })
+    }
+  })
+
+  it.skipIf(LAN_ADDRESS === undefined)('bootstraps RPC and event streams on an insecure LAN origin', async () => {
+    requireDist()
+    const sessionsDir = mkdtempSync(join(tmpdir(), 'dsh-web-lan-'))
+    const tsxLoader = pathToFileURL(createRequire(join(REPO_ROOT, 'package.json')).resolve('tsx')).href
+    const child = spawn(
+      process.execPath,
+      [
+        '--import', tsxLoader, join(REPO_ROOT, 'apps/cli/src/bin.ts'), 'web',
+        '--no-open', '--host', '0.0.0.0', '--port', '0',
+      ],
+      {
+        cwd: sessionsDir,
+        env: {
+          ...process.env,
+          DEEPSEEK_API_KEY: 'keyless-web-no-call',
+          DSH_HOME: join(sessionsDir, '.dsh'),
+          DSH_AGENTS_HOME: join(sessionsDir, '.agents'),
+          TSX_TSCONFIG_PATH: join(REPO_ROOT, 'tsconfig.json'),
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      },
+    )
+    const browser = await chromium.launch()
+    try {
+      const loopbackUrl = new URL(await waitForReadyLine(child))
+      const page = await newEnglishPage(browser)
+      const connectionWarnings: string[] = []
+      const sockets: PlaywrightWebSocket[] = []
+      page.on('console', (message) => {
+        if (message.text().includes('[web-runtime] connection lost')) connectionWarnings.push(message.text())
+      })
+      page.on('websocket', (socket) => { sockets.push(socket) })
+      const describeResponse = page.waitForResponse(response =>
+        response.request().method() === 'POST' && response.url().endsWith('/api/host.describe'))
+      await page.goto(`http://${LAN_ADDRESS}:${loopbackUrl.port}`)
+      expect(await page.evaluate(() => ({
+        secureContext: isSecureContext,
+        randomUuid: typeof crypto.randomUUID,
+        getRandomValues: typeof crypto.getRandomValues,
+      }))).toEqual({
+        secureContext: false,
+        randomUuid: 'undefined',
+        getRandomValues: 'function',
+      })
+      expect((await describeResponse).status()).toBe(200)
+      await expect.poll(() => sockets.filter(socket => !socket.isClosed()).length).toBe(2)
+      await page.waitForTimeout(1_000)
+      expect(connectionWarnings).toEqual([])
+      await page.close()
+    } finally {
+      await browser.close()
       const closed = child.exitCode === null
         ? new Promise<void>((resolveClose) => { child.once('close', () => { resolveClose() }) })
         : Promise.resolve()

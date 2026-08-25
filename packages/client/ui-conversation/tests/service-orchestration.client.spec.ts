@@ -103,6 +103,25 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('creates draft image ids without secure-context randomUUID', async () => {
+    const b = await bench()
+    vi.stubGlobal('crypto', {
+      getRandomValues(bytes: Uint8Array) {
+        return bytes.fill(0)
+      },
+    })
+    const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:draft-insecure')
+    try {
+      expect(b.root.createDraftImages([
+        new File([Uint8Array.of(1)], 'image.png', { type: 'image/png' }),
+      ])[0]?.id).toBe('00000000-0000-4000-8000-000000000000')
+    } finally {
+      created.mockRestore()
+      vi.unstubAllGlobals()
+      await b.runtime.dispose()
+    }
+  })
+
   it('validates every MIME type before allocating previews', async () => {
     const b = await bench()
     const created = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview')

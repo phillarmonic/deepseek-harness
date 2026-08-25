@@ -7,6 +7,7 @@ These zero-dependency packages provide small primitives shared by multiple capab
 | Package | Role |
 |---|---|
 | [`brand/`](brand/README.md) | Provides nominally branded types |
+| [`random-uuid/`](random-uuid/README.md) | Generates UUID v4 values on secure and insecure browser origins |
 | [`paths/`](home-paths/README.md) | Resolves the Harness data root and shared paths |
 | [`timeout/`](timeout/README.md) | Provides deadline and timeout classification primitives |
 | [`retention/`](output-retention/README.md) | Bounds retained text and item collections |

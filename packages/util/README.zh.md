@@ -7,6 +7,7 @@
 | 包 | 职责 |
 |---|---|
 | [`brand/`](brand/README.zh.md) | 提供带名义品牌的类型 |
+| [`random-uuid/`](random-uuid/README.zh.md) | 在安全与不安全浏览器来源中生成 UUID v4 值 |
 | [`paths/`](home-paths/README.zh.md) | 解析 Harness 数据根目录和共享路径 |
 | [`timeout/`](timeout/README.zh.md) | 提供截止时间和超时分类原语 |
 | [`retention/`](output-retention/README.zh.md) | 限制保留文本和项集合的大小 |

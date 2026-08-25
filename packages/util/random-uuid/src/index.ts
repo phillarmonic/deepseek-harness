@@ -1,8 +1,13 @@
-/** Browser-safe UUID generation for client-side wire correlation. */
+/**
+ * RFC 4122 UUID v4 generation backed by Web Crypto entropy without requiring
+ * the secure-context-only `crypto.randomUUID()` convenience method.
+ * @module @deepseek-ai/dsh-random-uuid
+ */
 
 /**
- * Generate an RFC 4122 version 4 UUID without requiring a secure context.
- * @returns a UUID backed by `crypto.getRandomValues()`, which browsers expose on insecure origins.
+ * Generate an RFC 4122 version 4 UUID in browsers and Node runtimes that expose
+ * `crypto.getRandomValues()`.
+ * @returns A lowercase UUID v4 string.
  */
 export function randomUuid(): string {
   const bytes = globalThis.crypto.getRandomValues(new Uint8Array(16))
