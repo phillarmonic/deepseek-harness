@@ -8,7 +8,11 @@ The package owns only identifier generation. Consumers retain ownership of ident
 
 ## Model Experience
 
-None. Consumers use generated identifiers for model-hidden correlation and browser-local state.
+None, as consumers use generated identifiers only for model-hidden correlation and browser-local state.
+
+#### KV Cache effect
+
+None; generated identifiers do not enter a model request prefix.
 
 ## Known Limitations and Deferred Work
 
