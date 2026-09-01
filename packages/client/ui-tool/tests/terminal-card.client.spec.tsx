@@ -357,7 +357,10 @@ describe('chat row terminal body', () => {
     const view = render(<GenericToolCard {...ownerProps(running())} />)
     toggleRow(view)
     expect(view.getByText('ls -la')).toBeTruthy()
-    expect(view.queryByText('复制')).toBeNull()
+    // The terminal card hides its own copy affordance until output lands; the
+    // row's serialized-call Copy pill is a separate chrome and stays.
+    const terminal = view.container.querySelector('[data-terminal]')
+    expect(terminal?.textContent).not.toContain('复制')
     // The card states its own run state: a running command reads as running
     // even though it has no output yet to distinguish it from an empty settle.
     expect(runStateOf(view.container)).toBe('ongoing')

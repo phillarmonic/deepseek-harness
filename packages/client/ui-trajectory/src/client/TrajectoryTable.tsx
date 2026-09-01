@@ -27,7 +27,7 @@ import type {
 import type {
   AssistantMetricDetail, TrajectoryCellKind, TrajectoryCellProps, TrajectorySourceBlock,
 } from './trajectory-record.ts'
-import { formatElapsedSeconds, trajectoryRecordId } from './trajectory-record.ts'
+import { formatElapsedSeconds, serializeTrajectoryRecord, trajectoryRecordId } from './trajectory-record.ts'
 import {
   groupTrajectoryVirtualRows, trajectoryVirtualRecordKey,
 } from './trajectory-virtual-rows.ts'
@@ -2048,6 +2048,13 @@ export function TrajectoryTable({
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
   const [codeWrappingOnOpen, setCodeWrappingOnOpen] = useState(false)
   const [thinkingDisclosure, setThinkingDisclosure] = useState<{ recordId: string; expanded: boolean }>()
+  // Copy feedback keyed by record so a selection change mid-window never shows
+  // a check on a call that was not copied.
+  const [copiedRecordKey, setCopiedRecordKey] = useState<string | null>(null)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current)
+  }, [])
   const [detailsWidth, setDetailsWidth] = useState<number | null>(null)
   const [toolRequestOffset, setToolRequestOffset] = useState<number | null>(null)
   const detailsResizeDrag = useRef<DetailsResizeDrag | null>(null)
@@ -2090,6 +2097,20 @@ export function TrajectoryTable({
     }
   }
   const selectedIndex = selected?.cell.index ?? null
+  const selectedCopyText = selected !== undefined && selectedRequest === null
+    ? serializeTrajectoryRecord(selected.cell)
+    : null
+  const copySelectedRecord = useCallback((recordKey: string, text: string) => {
+    void writeClipboard(text).then((ok) => {
+      if (!ok) return
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current)
+      setCopiedRecordKey(recordKey)
+      copyTimer.current = setTimeout(() => {
+        copyTimer.current = null
+        setCopiedRecordKey(null)
+      }, 1000)
+    })
+  }, [])
   useEffect(() => {
     onSelectedIndexChange?.(selectedIndex)
   }, [onSelectedIndexChange, selectedIndex])
@@ -3011,6 +3032,20 @@ export function TrajectoryTable({
                     </>
                   )}
             </div>
+            {selectedCopyText !== null && selected !== undefined && (
+              <Tooltip label="Copy serialized record" side="bottom">
+                <button
+                  type="button"
+                  className={css.close}
+                  aria-label="Copy serialized record"
+                  onClick={() => { copySelectedRecord(trajectoryRecordId(selected.cell), selectedCopyText) }}
+                >
+                  {copiedRecordKey === trajectoryRecordId(selected.cell)
+                    ? <IconCheckOutline16 />
+                    : <IconCopyOutline16 />}
+                </button>
+              </Tooltip>
+            )}
             <button
               type="button"
               className={css.close}
