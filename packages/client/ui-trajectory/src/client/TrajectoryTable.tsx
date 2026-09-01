@@ -4,13 +4,16 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { CSSProperties, ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
+  IconCheckOutline16,
   IconChevronRightOutline14,
+  IconCopyOutline16,
   IconSettingsOutline16,
   IconSparkle16,
   IconUserOutline16,
   JsonTree,
   MarkdownText,
   Tooltip,
+  writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { JsonTreeLabels, MarkdownLabels } from '@deepseek-ai/dsh-client-ui-primitives'
 import { structuredPatch } from 'diff'
@@ -21,7 +24,7 @@ import type {
 import type {
   AssistantMetricDetail, TrajectoryCellKind, TrajectoryCellProps, TrajectorySourceBlock,
 } from './trajectory-record.ts'
-import { formatElapsedSeconds, trajectoryRecordId } from './trajectory-record.ts'
+import { formatElapsedSeconds, serializeTrajectoryRecord, trajectoryRecordId } from './trajectory-record.ts'
 import {
   groupTrajectoryVirtualRows, trajectoryVirtualRecordKey,
 } from './trajectory-virtual-rows.ts'
@@ -1829,6 +1832,13 @@ export function TrajectoryTable({
   const [selectedRequest, setSelectedRequest] = useState<SelectedRequest | null>(null)
   const [activeTab, setActiveTab] = useState<DetailTab>('overview')
   const [thinkingExpanded, setThinkingExpanded] = useState(false)
+  // Copy feedback keyed by record so a selection change mid-window never shows
+  // a check on a call that was not copied.
+  const [copiedRecordKey, setCopiedRecordKey] = useState<string | null>(null)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => {
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current)
+  }, [])
   const [detailsWidth, setDetailsWidth] = useState<number | null>(null)
   const [toolRequestOffset, setToolRequestOffset] = useState<number | null>(null)
   const detailsResizeDrag = useRef<DetailsResizeDrag | null>(null)
@@ -1861,6 +1871,20 @@ export function TrajectoryTable({
     ? undefined
     : currentRecord(selectedTemplate)
   const selectedIndex = selected?.cell.index ?? null
+  const selectedCopyText = selected !== undefined && selectedRequest === null
+    ? serializeTrajectoryRecord(selected.cell)
+    : null
+  const copySelectedRecord = useCallback((recordKey: string, text: string) => {
+    void writeClipboard(text).then((ok) => {
+      if (!ok) return
+      if (copyTimer.current !== null) clearTimeout(copyTimer.current)
+      setCopiedRecordKey(recordKey)
+      copyTimer.current = setTimeout(() => {
+        copyTimer.current = null
+        setCopiedRecordKey(null)
+      }, 1000)
+    })
+  }, [])
   useEffect(() => {
     onSelectedIndexChange?.(selectedIndex)
   }, [onSelectedIndexChange, selectedIndex])
@@ -2780,6 +2804,20 @@ export function TrajectoryTable({
                     </>
                   )}
             </div>
+            {selectedCopyText !== null && selected !== undefined && (
+              <Tooltip label="Copy serialized record" side="bottom">
+                <button
+                  type="button"
+                  className={css.close}
+                  aria-label="Copy serialized record"
+                  onClick={() => { copySelectedRecord(trajectoryRecordId(selected.cell), selectedCopyText) }}
+                >
+                  {copiedRecordKey === trajectoryRecordId(selected.cell)
+                    ? <IconCheckOutline16 />
+                    : <IconCopyOutline16 />}
+                </button>
+              </Tooltip>
+            )}
             <button
               type="button"
               className={css.close}

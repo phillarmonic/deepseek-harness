@@ -135,6 +135,46 @@ function parseArgs(argsRaw: string): unknown {
   }
 }
 
+/** Settled status shared by the row model and the clipboard serialization. */
+function blockState(block: ToolCallBlock): ToolRowState {
+  if (!('kind' in block)) return 'running'
+  if (block.error?.code === 'interrupted') return 'stopped'
+  return block.isError ? 'error' : 'ok'
+}
+
+/**
+ * Serialize a tool call to a stable JSON string for clipboard debugging: tool
+ * name, call id, settled status, parsed arguments (raw string when they are
+ * not JSON), and — once settled — the result content blocks, error pair, and
+ * call/result times. The shape is a debugging projection, not a wire contract.
+ * @param toolName - wire tool name (dispatch-supplied; survives windowless results).
+ * @param block - RunningToolCall or ToolResultNode off the snapshot caches.
+ * @returns pretty-printed JSON text of the call.
+ */
+export function serializeToolCall(toolName: string, block: ToolCallBlock): string {
+  const done = 'kind' in block
+  const argsRaw = (done ? block.call?.argsRaw : block.argsRaw) ?? ''
+  const parsed = parseArgs(argsRaw)
+  const serialized: Record<string, unknown> = {
+    tool: toolName,
+    callId: block.callId,
+    status: blockState(block),
+    arguments: parsed === undefined ? argsRaw : parsed,
+  }
+  if (done) {
+    serialized.startedAt = block.callTime
+    serialized.settledAt = block.time
+    serialized.result = {
+      isError: block.isError,
+      ...(block.error !== undefined ? { error: block.error } : {}),
+      content: block.content,
+    }
+  } else {
+    serialized.startedAt = block.time
+  }
+  return JSON.stringify(serialized, null, 2)
+}
+
 function firstLine(text: string): string {
   const nl = text.indexOf('\n')
   return nl === -1 ? text : text.slice(0, nl)
@@ -221,9 +261,7 @@ export function toolRowModel(toolName: string, block: ToolCallBlock, cwd?: strin
   const variant = classifyTool(toolName)
   const done = 'kind' in block
   const argsRaw = (done ? block.call?.argsRaw : block.argsRaw) ?? ''
-  const state: ToolRowState = !done ? 'running'
-    : block.error?.code === 'interrupted' ? 'stopped'
-      : block.isError ? 'error' : 'ok'
+  const state: ToolRowState = blockState(block)
   const base = argsRaw === ''
     ? block.callId
     : abbreviateHomePath(relativizeToCwd(deriveSummary(variant, argsRaw), cwd), home)

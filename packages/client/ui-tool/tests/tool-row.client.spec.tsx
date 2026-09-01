@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render } from '@testing-library/react'
+import { cleanup, fireEvent, render, act } from '@testing-library/react'
 
 import type { RunningToolCall, ToolResultNode } from '@deepseek-ai/dsh-client-ui-chat/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import {
-  classifyTool, formatToolBody, resultText, toolRowModel,
+  classifyTool, formatToolBody, resultText, serializeToolCall, toolRowModel,
 } from '../src/client/tool/models/tool-call-model.ts'
 import { ToolRow } from '../src/client/tool/components/ToolRow.tsx'
 import { GenericToolCard, type GenericToolCardProps } from '../src/client/tool/toolviews/GenericToolCard.tsx'
@@ -230,6 +230,60 @@ describe('tool-call-model', () => {
   })
 })
 
+describe('serializeToolCall', () => {
+  it('serializes a running call with parsed arguments and no result', () => {
+    expect(JSON.parse(serializeToolCall('bash', running()))).toEqual({
+      tool: 'bash',
+      callId: 'c1',
+      status: 'running',
+      arguments: { command: 'ls -la', description: 'List files' },
+      startedAt: 1_000,
+    })
+  })
+
+  it('serializes a settled ok call with its result and times', () => {
+    expect(JSON.parse(serializeToolCall('bash', result({
+      content: [{ type: 'text', text: 'done' }],
+    })))).toEqual({
+      tool: 'bash',
+      callId: 'c1',
+      status: 'ok',
+      arguments: { command: 'ls -la', description: 'List files' },
+      startedAt: 1_000,
+      settledAt: 2_000,
+      result: { isError: false, content: [{ type: 'text', text: 'done' }] },
+    })
+  })
+
+  it('carries the structured error pair on a failed call', () => {
+    const serialized = JSON.parse(serializeToolCall('bash', result({
+      isError: true,
+      error: { name: 'ToolError', code: 'denied' },
+    }))) as { status: string; result: { error: unknown } }
+    expect(serialized.status).toBe('error')
+    expect(serialized.result.error).toEqual({ name: 'ToolError', code: 'denied' })
+  })
+
+  it('reports an interrupted call as stopped', () => {
+    const serialized = JSON.parse(serializeToolCall('bash', result({
+      isError: true,
+      error: { name: 'ToolError', code: 'interrupted' },
+    }))) as { status: string }
+    expect(serialized.status).toBe('stopped')
+  })
+
+  it('keeps non-JSON arguments raw', () => {
+    const serialized = JSON.parse(serializeToolCall('bash', running({ argsRaw: '{truncated' }))) as Record<string, unknown>
+    expect(serialized.arguments).toBe('{truncated')
+  })
+
+  it('serializes a windowless result head with empty arguments and no start time', () => {
+    const serialized = JSON.parse(serializeToolCall('bash', result({ call: null, callTime: null }))) as Record<string, unknown>
+    expect(serialized.arguments).toBe('')
+    expect(serialized.startedAt).toBeNull()
+  })
+})
+
 describe('ToolRow', () => {
   const rowProps = {
     t,
@@ -405,6 +459,64 @@ describe('ToolRow', () => {
     const view = render(<ToolRow {...rowProps} />)
     fireEvent.click(view.getByRole('button'))
     expect(view.queryByText('查看')).toBeNull()
+  })
+
+  it('the expanded body carries a Copy pill that writes the serialized call text', async () => {
+    vi.useFakeTimers()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const view = render(<ToolRow {...rowProps} copyText='{"tool":"bash"}' />)
+    // Collapsed: no pill.
+    expect(view.queryByRole('button', { name: '复制' })).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: /Bash/ }))
+    fireEvent.click(view.getByRole('button', { name: '复制' }))
+    expect(writeText).toHaveBeenCalledWith('{"tool":"bash"}')
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(view.getByRole('button', { name: '复制成功' })).toBeTruthy()
+    // While the ok label is showing, further clicks are no-ops.
+    fireEvent.click(view.getByRole('button', { name: '复制成功' }))
+    expect(writeText).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(view.getByRole('button', { name: '复制' })).toBeTruthy()
+    vi.useRealTimers()
+  })
+
+  it('no copy text, no pill', () => {
+    const view = render(<ToolRow {...rowProps} />)
+    fireEvent.click(view.getByRole('button'))
+    expect(view.queryByRole('button', { name: '复制' })).toBeNull()
+  })
+
+  it('keeps the copy label when the host refuses the write', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    })
+    const view = render(<ToolRow {...rowProps} copyText="x" />)
+    fireEvent.click(view.getByRole('button', { name: /Bash/ }))
+    fireEvent.click(view.getByRole('button', { name: '复制' }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(view.getByRole('button', { name: '复制' })).toBeTruthy()
+  })
+
+  it('ignores a write that settles after the row unmounts', async () => {
+    let settle: (() => void) | undefined
+    const writeText = vi.fn(() => new Promise<void>((resolve) => {
+      settle = resolve
+    }))
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const view = render(<ToolRow {...rowProps} copyText="x" />)
+    fireEvent.click(view.getByRole('button', { name: /Bash/ }))
+    fireEvent.click(view.getByRole('button', { name: '复制' }))
+    view.unmount()
+    settle?.()
+    await act(async () => {
+      await Promise.resolve()
+    })
   })
 
   it('the expanded card gutter-labels each section it carries (IN / OUT)', () => {

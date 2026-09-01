@@ -172,6 +172,32 @@
   overflow-y: auto;
 }
 
+/* Model-pane filter field: sits above the scrolling groups, styled as a
+   plain row so the card keeps its single-surface read. */
+.search {
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  width: 100%;
+  height: 32px;
+  margin-bottom: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-inverted);
+  border-radius: 8px;
+  outline: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.search:focus-visible {
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.search::placeholder {
+  color: var(--dsw-alias-label-caption);
+}
+
 .group + .group {
   margin-top: 4px;
 }

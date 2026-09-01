@@ -235,6 +235,59 @@ describe('ModelSelect reasoning effort', () => {
       Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth)
       Object.defineProperty(HTMLElement.prototype, 'offsetHeight', offsetHeight)
     }
+
+  it('filters the model pane by a case-insensitive name or id substring and Enter picks the first match', async () => {
+    const groups = [
+      {
+        id: 'deepseek-official',
+        name: 'DeepSeek',
+        models: [
+          { id: 'deepseek-v4-flash', name: 'DeepSeek-V4-Flash', reasoning },
+          { id: 'deepseek-v4-pro', name: 'DeepSeek-V4-Pro' },
+        ],
+      },
+      {
+        id: 'openrouter',
+        name: 'OpenRouter',
+        models: [{ id: 'google/gemini-3-flash', name: 'Google: Gemini 3 Flash' }],
+      },
+    ]
+    const directory = createSnapshotStore<ModelDirectoryState>(state({ groups }))
+    const select = vi.fn(async (selection: ModelSelection) => {
+      directory.set(state({ groups, current: selection }))
+      return true
+    })
+    render(<ModelSelect
+      locked={false}
+      available
+      directory={directory}
+      load={vi.fn()}
+      select={select}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('button', { name: /选择模型/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /模型/ }))
+    const search = screen.getByRole('searchbox', { name: '按名称筛选模型' })
+
+    // Substring against the id, not the display name; the empty OpenRouter
+    // group drops out with its heading.
+    fireEvent.change(search, { target: { value: 'GEMINI-3' } })
+    expect(screen.getAllByRole('menuitemradio').map(item => item.textContent))
+      .toEqual(['Google: Gemini 3 Flash'])
+    expect(screen.queryByText('OpenRouter')).toBeTruthy()
+    expect(screen.queryByText('DeepSeek')).toBeNull()
+
+    // No match keeps the groups empty with the filter-specific copy.
+    fireEvent.change(search, { target: { value: 'no-such-model' } })
+    expect(screen.queryAllByRole('menuitemradio')).toEqual([])
+    expect(screen.getByText('没有匹配的模型。')).toBeTruthy()
+
+    fireEvent.change(search, { target: { value: 'pro' } })
+    fireEvent.keyDown(search, { key: 'Enter' })
+    await waitFor(() => {
+      expect(select).toHaveBeenCalledWith({ provider: 'deepseek-official', model: 'deepseek-v4-pro' })
+    })
   })
 
   it('renders no Agent-bound control for an addressed subagent session', () => {

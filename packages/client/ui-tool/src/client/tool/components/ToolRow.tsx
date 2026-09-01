@@ -1,8 +1,10 @@
-import { useMemo, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import {
+  useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode,
+} from 'react'
 import clsx from 'clsx'
 import {
-  CodeBlock, DiffBlock, DisclosureRow, IconInspectOutline12, ReadBlock, SearchBlock, StateDot, TerminalBlock, WebBlock,
-  diffTotals,
+  CodeBlock, DiffBlock, DisclosureRow, IconCheckOutline16, IconCopyOutline16, IconInspectOutline12, ReadBlock,
+  SearchBlock, StateDot, TerminalBlock, WebBlock, diffTotals, writeClipboard,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsRenderSlots, TranslateNS } from '@deepseek-ai/dsh-client-ui-slots'
 import type { OpenFileOptions } from '@deepseek-ai/dsh-client-ui-chat/client'
@@ -85,6 +87,11 @@ export interface ToolRowProps {
    * over the expanded body. Absent = no affordance.
    */
   inspect?: (() => void) | undefined
+  /**
+   * Serialized call JSON written to the clipboard by the Copy pill beside
+   * Inspect (debugging hand-off). Absent = no copy affordance.
+   */
+  copyText?: string | undefined
 }
 
 function leadingFor(state: ToolRowState, icon: ReactNode): ReactNode {
@@ -106,6 +113,49 @@ function stateStatus(state: ToolRowState, t: TranslateNS<'conversation'>): strin
     case 'stopped': return t('row.stopped')
     default: return null
   }
+}
+
+/** Hover-revealed Copy pill beside Inspect: writes the serialized call JSON
+ *  and swaps to the check glyph for a second on a host-accepted write. */
+function CopyPill({ text, t }: { text: string; t: TranslateNS<'conversation'> }) {
+  const [copied, setCopied] = useState(false)
+  const copyPending = useRef(false)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // The epoch guards a state write landing after unmount.
+  const copyEpoch = useRef(0)
+  useEffect(() => () => {
+    copyEpoch.current += 1
+    copyPending.current = false
+    if (copyTimer.current !== null) clearTimeout(copyTimer.current)
+  }, [])
+  const onCopy = useCallback(() => {
+    // Same success chrome as the message copy action: re-clicks during the
+    // ok window neither re-copy nor stack timers.
+    if (copied || copyPending.current) return
+    const epoch = copyEpoch.current
+    copyPending.current = true
+    void writeClipboard(text).then((ok) => {
+      if (epoch !== copyEpoch.current) return
+      copyPending.current = false
+      if (!ok) return
+      setCopied(true)
+      copyTimer.current = setTimeout(() => {
+        copyTimer.current = null
+        setCopied(false)
+      }, 1000)
+    })
+  }, [copied, text])
+  return (
+    <button
+      type="button"
+      className={css.inspectButton}
+      aria-label={copied ? t('copied') : t('copy')}
+      onClick={onCopy}
+    >
+      {copied ? <IconCheckOutline16 size={12} /> : <IconCopyOutline16 size={12} />}
+      {copied ? t('copied') : t('copy')}
+    </button>
+  )
 }
 
 export function ToolRow({
@@ -133,6 +183,7 @@ export function ToolRow({
   filePathLine,
   onOpenFile,
   inspect,
+  copyText,
 }: ToolRowProps) {
   const [expanded, setExpanded] = useState(false)
   const terminalLabels = useMemo(() => terminalBlockLabels(t), [t])
@@ -318,6 +369,7 @@ export function ToolRow({
                             )}
                           </>
                         )}
+          {copyText !== undefined && <CopyPill text={copyText} t={t} />}
           {inspect !== undefined && (
             <button
               type="button"

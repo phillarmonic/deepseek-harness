@@ -11,7 +11,9 @@ import {
   TrajectoryCell as LocalizedTrajectoryCell,
   type TrajectoryCellKind,
 } from '../src/client/TrajectoryCell.tsx'
-import { formatDurationMillis as formatDurationMillisWithLocale } from '../src/client/trajectory-record.ts'
+import {
+  formatDurationMillis as formatDurationMillisWithLocale, serializeTrajectoryRecord,
+} from '../src/client/trajectory-record.ts'
 import { t } from './locale.client.ts'
 
 const formatDurationMillis = (value: number | null) => formatDurationMillisWithLocale(value, t)
@@ -22,6 +24,126 @@ function TrajectoryCell(props: Omit<ComponentProps<typeof LocalizedTrajectoryCel
 }
 
 afterEach(cleanup)
+
+describe('serializeTrajectoryRecord', () => {
+  it('serializes a tool record with every detail it carries', () => {
+    expect(JSON.parse(serializeTrajectoryRecord({
+      index: 2,
+      kind: 'tool',
+      text: 'bash · {"command":"pwd"}',
+      callId: 'call-1',
+      isError: true,
+      startedAt: 1_000,
+      timeSeconds: 0.2,
+      inputDetail: '{"command":"pwd"}',
+      outputDetail: 'ToolError: non_zero_exit',
+      schemaDetail: '{"name":"bash"}',
+    }))).toEqual({
+      kind: 'tool',
+      summary: 'bash · {"command":"pwd"}',
+      startedAt: 1_000,
+      durationSeconds: 0.2,
+      source: null,
+      input: '{"command":"pwd"}',
+      output: 'ToolError: non_zero_exit',
+      thinking: null,
+      prompt: null,
+      callId: 'call-1',
+      isError: true,
+      schema: '{"name":"bash"}',
+    })
+  })
+
+  it('fills absent optional details with null and defaults isError to false', () => {
+    expect(JSON.parse(serializeTrajectoryRecord({
+      index: 3, kind: 'subtool', text: 'read · src/a.ts', timeSeconds: null,
+    }))).toEqual({
+      kind: 'subtool',
+      summary: 'read · src/a.ts',
+      startedAt: null,
+      durationSeconds: null,
+      source: null,
+      input: null,
+      output: null,
+      thinking: null,
+      prompt: null,
+      callId: null,
+      isError: false,
+      schema: null,
+    })
+  })
+
+  it('serializes a user record with its producer source and no tool-only fields', () => {
+    expect(JSON.parse(serializeTrajectoryRecord({
+      index: 1,
+      kind: 'user',
+      text: 'Refactor the lint findings.',
+      timeSeconds: null,
+      inputDetail: 'Refactor the lint findings.\nUse batch edits.',
+      messageSource: { role: 'user', name: 'andy' },
+    }))).toEqual({
+      kind: 'user',
+      summary: 'Refactor the lint findings.',
+      startedAt: null,
+      durationSeconds: null,
+      source: { role: 'user', name: 'andy' },
+      input: 'Refactor the lint findings.\nUse batch edits.',
+      output: null,
+      thinking: null,
+      prompt: null,
+    })
+  })
+
+  it('serializes an assistant record with its output and thinking details', () => {
+    expect(JSON.parse(serializeTrajectoryRecord({
+      index: 4,
+      kind: 'message',
+      text: 'Done.',
+      timeSeconds: 1.5,
+      startedAt: 2_000,
+      outputDetail: 'Done. Applied 12 fixes.',
+      thinkingDetail: 'Plan the batch order.',
+    }))).toEqual({
+      kind: 'message',
+      summary: 'Done.',
+      startedAt: 2_000,
+      durationSeconds: 1.5,
+      source: null,
+      input: null,
+      output: 'Done. Applied 12 fixes.',
+      thinking: 'Plan the batch order.',
+      prompt: null,
+    })
+  })
+
+  it('serializes a system record with its prompt snapshot', () => {
+    expect(JSON.parse(serializeTrajectoryRecord({
+      index: 0,
+      kind: 'system',
+      text: 'Initial System Prompt',
+      timeSeconds: null,
+      promptDetail: {
+        config: { provider: 'deepseek', model: 'deepseek-chat' },
+        system: 'You are an agent.',
+        tools: [],
+      },
+    }))).toEqual({
+      kind: 'system',
+      summary: 'Initial System Prompt',
+      startedAt: null,
+      durationSeconds: null,
+      source: null,
+      input: null,
+      output: null,
+      thinking: null,
+      prompt: {
+        config: { provider: 'deepseek', model: 'deepseek-chat' },
+        system: 'You are an agent.',
+        tools: [],
+      },
+    })
+  })
+})
 
 describe('formatDurationMillis', () => {
   it('formats exact millisecond labels with thousands separators', () => {

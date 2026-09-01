@@ -101,6 +101,38 @@ export interface TrajectoryCellProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 /**
+ * Serialize any trajectory record to a stable JSON string for clipboard
+ * debugging: kind, summary text, timing, and the full input/output/thinking
+ * details the record carries, plus the producer source for user and context
+ * records, the prompt snapshot for system records, and the call id, failure
+ * state, and call-time schema for tool and subtool records. The shape is a
+ * debugging projection, not a wire contract.
+ * @param cell - Projected trajectory record.
+ * @returns Pretty-printed JSON text.
+ */
+export function serializeTrajectoryRecord(cell: TrajectoryCellProps): string {
+  const tool = cell.kind === 'tool' || cell.kind === 'subtool'
+  return JSON.stringify({
+    kind: cell.kind,
+    summary: cell.text,
+    startedAt: cell.startedAt ?? null,
+    durationSeconds: cell.timeSeconds,
+    source: cell.messageSource ?? null,
+    input: cell.inputDetail ?? null,
+    output: cell.outputDetail ?? null,
+    thinking: cell.thinkingDetail ?? null,
+    prompt: cell.promptDetail ?? null,
+    ...(tool
+      ? {
+        callId: cell.callId ?? null,
+        isError: cell.isError ?? false,
+        schema: cell.schemaDetail ?? null,
+      }
+      : {}),
+  }, null, 2)
+}
+
+/**
  * Resolve the identity that survives prepending older projected records.
  * @param cell - Projected trajectory record.
  * @returns Stable identity from the owning event or tool call, with a fixture fallback.

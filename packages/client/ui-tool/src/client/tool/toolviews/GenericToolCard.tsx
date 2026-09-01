@@ -8,7 +8,7 @@ import { diffCardModel } from '../models/diff-card-model.ts'
 import { searchCardModel } from '../models/search-card-model.ts'
 import { terminalCardModel, terminalFailed } from '../models/terminal-card-model.ts'
 import { webCardModel } from '../models/web-card-model.ts'
-import { toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
+import { serializeToolCall, toolRowModel, type ToolRowVariant } from '../models/tool-call-model.ts'
 import { ToolRow } from '../components/ToolRow.tsx'
 
 /** Variant leading icons (figma table); all glyphs render at 14 inside the 16px leading box. */
@@ -63,6 +63,7 @@ export function GenericToolCard({ toolName, block, cwd, home, openFile, inspect,
       filePath={model.filePath}
       onOpenFile={singleFile ? openFile : undefined}
       inspect={inspect}
+      copyText={serializeToolCall(toolName, block)}
     />
   )
 }

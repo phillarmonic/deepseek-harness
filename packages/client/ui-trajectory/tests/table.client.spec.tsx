@@ -2,7 +2,7 @@
 /** Trajectory ledger selection, details, status, and fold behavior. */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, act } from '@testing-library/react'
 import type { ComponentProps } from 'react'
 import type { RenderMessageImages } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { TrajectoryTable as LocalizedTrajectoryTable } from '../src/client/TrajectoryTable.tsx'
@@ -1145,5 +1145,81 @@ describe('TrajectoryTable', () => {
 
     expect(screen.getByRole('row', { name: /TOOL/ }).getAttribute('aria-selected')).toBe('false')
     expect(onInspectApplied).not.toHaveBeenCalled()
+  })
+
+  it('copies the serialized record from the details header', async () => {
+    vi.useFakeTimers()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const view = render(<TrajectoryTable turns={CALL_TURNS} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
+    const copy = screen.getByRole('button', { name: 'Copy serialized record' })
+    fireEvent.click(copy)
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(writeText.mock.calls[0]?.[0] as string)).toMatchObject({
+      kind: 'tool',
+      callId: 'call-1',
+      input: '{"command":"pwd"}',
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    // A second copy inside the feedback window replaces the pending reset.
+    fireEvent.click(copy)
+    expect(writeText).toHaveBeenCalledTimes(2)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    // Unmounting with no pending feedback leaves nothing to clear.
+    view.unmount()
+    vi.useRealTimers()
+  })
+
+  it('clears a pending copy feedback timer when the table unmounts', async () => {
+    vi.useFakeTimers()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    const view = render(<TrajectoryTable turns={CALL_TURNS} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy serialized record' }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    view.unmount()
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000)
+    })
+    vi.useRealTimers()
+  })
+
+  it('keeps the copy icon when the host refuses the write', async () => {
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) },
+    })
+    render(<TrajectoryTable turns={CALL_TURNS} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /TOOL/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy serialized record' }))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(screen.getByRole('button', { name: 'Copy serialized record' })).toBeTruthy()
+  })
+
+  it('copies the serialized record for an assistant record', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    render(<TrajectoryTable turns={TURNS} {...FOLD_PROPS} />)
+    fireEvent.click(screen.getByRole('row', { name: /ASSISTANT/ }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy serialized record' }))
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(writeText.mock.calls[0]?.[0] as string)).toMatchObject({
+      kind: 'message',
+      summary: 'Checking files',
+      output: 'Checking files',
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
   })
 })
