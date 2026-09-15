@@ -3033,11 +3033,11 @@ export function TrajectoryTable({
                   )}
             </div>
             {selectedCopyText !== null && selected !== undefined && (
-              <Tooltip label="Copy serialized record" side="bottom">
+              <Tooltip label={t('details.copySerialized')} side="bottom">
                 <button
                   type="button"
                   className={css.close}
-                  aria-label="Copy serialized record"
+                  aria-label={t('details.copySerialized')}
                   onClick={() => { copySelectedRecord(trajectoryRecordId(selected.cell), selectedCopyText) }}
                 >
                   {copiedRecordKey === trajectoryRecordId(selected.cell)
